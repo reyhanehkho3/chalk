@@ -99,6 +99,48 @@ console.log(error('Error!'));
 console.log(warning('Warning!'));
 ```
 
+### Themes
+
+Chalk ships with a small set of pre-composed theme presets you can reach through `chalk.theme`. Each preset bundles a modifier and a color so you can write `chalk.theme.error('Boom')` instead of remembering the underlying chain.
+
+```js
+import chalk from 'chalk';
+
+console.log(chalk.theme.error('Boom!'));    // bold red
+console.log(chalk.theme.success('Yes!'));   // green
+console.log(chalk.theme.warning('Hmm...')); // bold yellow
+console.log(chalk.theme.info('FYI'));       // cyan
+console.log(chalk.theme.muted('…'));        // gray
+```
+
+Themes participate in the chainable API, so you can compose them with other styles or other themes:
+
+```js
+chalk.italic.theme.error('Boom');
+chalk.bgWhite.theme.warning('Caution');
+```
+
+Override a preset on an instance to customize it locally without touching the defaults:
+
+```js
+chalk.theme.error = chalk.bold.bgRed;
+chalk.theme.error('Boom'); // bold red on red background
+```
+
+Register your own presets with `chalk.addTheme` so any chain you reach for often has a name. The new entry joins the shared `themes` registry, so it is available on the default `chalk` and any `new Chalk()` instance.
+
+```js
+import chalk from 'chalk';
+
+chalk.addTheme('happy', chalk.bold.green);
+chalk.theme.happy('yay!');
+
+const mine = new Chalk();
+mine.theme.happy('yay!'); // works on the new instance too
+```
+
+`addTheme` accepts any chained style as the builder — `chalk.bold.green`, `chalk.bgMagenta.underline`, etc. — and throws if you pass the bare `chalk` function, since it carries no style info to extract. Calling `addTheme` before any `chalk.theme` access on the instances you care about ensures the new preset shows up on first read; otherwise, the cache is rebuilt on the called instance automatically.
+
 Take advantage of console.log [string substitution](https://nodejs.org/docs/latest/api/console.html#console_console_log_data_args):
 
 ```js
@@ -169,6 +211,25 @@ console.log(modifierNames.includes('bold'));
 console.log(foregroundColorNames.includes('pink'));
 //=> false
 ```
+
+### themes
+
+`themes` is the registry backing `chalk.theme`. Each entry holds the pre-composed ANSI `open` and `close` sequences for a named preset, which makes it useful for inspection, iteration, or pre-defining a custom palette before any `chalk.theme` access has been cached.
+
+```js
+import {themes} from 'chalk';
+
+console.log(themes.warning);
+//=> { open: '\x1B[1m\x1B[33m', close: '\x1B[39m\x1B[22m' }
+```
+
+The default presets are `error`, `success`, `warning`, `info`, and `muted`. Register your own with `chalk.addTheme(name, builder)` — see the [Themes](#themes) guide in the Usage section above for the full usage guide.
+
+### chalk.addTheme(name, builder)
+
+Register a custom theme preset under `name`. The `builder` is any chained Chalk style (e.g. `chalk.bold.green`); passing the bare `chalk` function throws. The new entry joins the shared `themes` registry, so it is visible on every instance whose `theme` cache has not yet been built. Calling on an instance with a cached theme triggers an in-place rebuild.
+
+Returns the instance for chaining.
 
 ## Styles
 

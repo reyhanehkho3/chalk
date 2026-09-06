@@ -332,6 +332,61 @@ export interface ChalkInstance {
 	readonly underlineMagentaBright: this;
 	readonly underlineCyanBright: this;
 	readonly underlineWhiteBright: this;
+
+	/**
+	Pre-composed style presets, each bundling a modifier and a color so a semantic name can stand
+	in for the underlying chain.
+
+	The defaults are:
+
+	- `error` - bold red, for failures.
+	- `success` - green, for positive outcomes.
+	- `warning` - bold yellow, for things to look at.
+	- `info` - cyan, for neutral status.
+	- `muted` - gray, for secondary text.
+
+	Override an entry on an instance to customize it locally:
+
+	@example
+	```
+	import chalk from 'chalk';
+
+	chalk.theme.error('Boom!'); // bold red
+	chalk.theme.error = chalk.bold.bgRed;
+	chalk.theme.error('Boom!'); // bold red on red background
+	```
+	*/
+	readonly theme: {
+		readonly error: ChalkInstance;
+		readonly success: ChalkInstance;
+		readonly warning: ChalkInstance;
+		readonly info: ChalkInstance;
+		readonly muted: ChalkInstance;
+	};
+
+	/**
+	Register a custom theme preset, available globally as `chalk.theme.<name>` afterwards.
+
+	The builder is any chained Chalk style (for example `chalk.bold.green`); its open and close
+	sequences are captured at the builder's current level. Calling on a builder that is the bare
+	`chalk` function throws, since it carries no style info to extract.
+
+	The new entry joins the shared `themes` registry, so it is visible on every chalk instance
+	that has not yet cached `theme`. If `theme` has already been cached on this instance, the
+	cache is rebuilt in place; cached theme objects on other instances remain stale until their
+	`theme` getter runs fresh.
+
+	Returns `this` for chaining.
+
+	@example
+	```
+	import chalk from 'chalk';
+
+	chalk.addTheme('happy', chalk.bold.green);
+	chalk.theme.happy('yay!');
+	```
+	*/
+	addTheme: (name: string, builder: ChalkInstance) => this;
 }
 
 /**
@@ -349,6 +404,20 @@ export const supportsColor: ColorInfo;
 
 export const chalkStderr: typeof chalk;
 export const supportsColorStderr: typeof supportsColor;
+
+/**
+Registry of theme presets backing `chalk.theme`. Each entry holds the pre-composed `open` and
+`close` ANSI sequences that `chalk.theme.<name>` applies. Mutate an entry before first access to
+`chalk.theme` to redefine a preset globally; otherwise override individual entries per-instance
+by assigning to `chalk.theme.<name>`.
+*/
+export const themes: {
+	readonly error: {readonly open: string; readonly close: string};
+	readonly success: {readonly open: string; readonly close: string};
+	readonly warning: {readonly open: string; readonly close: string};
+	readonly info: {readonly open: string; readonly close: string};
+	readonly muted: {readonly open: string; readonly close: string};
+};
 
 export {
 	ModifierName,
