@@ -133,6 +133,84 @@ for (const model of usedModels) {
 	}
 }
 
+// Themes are pre-composed bundles of styles (a modifier + a color, etc.) so callers can apply a
+// semantic name like `chalk.theme.error('Boom')` instead of remembering the underlying chain.
+// Each entry stores its combined open/close pair, which the getter below folds into a builder
+// against the instance's existing styler chain.
+export const themes = {
+	error: {
+		open: ansiStyles.bold.open + ansiStyles.red.open,
+		close: ansiStyles.red.close + ansiStyles.bold.close,
+	},
+	success: {
+		open: ansiStyles.green.open,
+		close: ansiStyles.green.close,
+	},
+	warning: {
+		open: ansiStyles.bold.open + ansiStyles.yellow.open,
+		close: ansiStyles.yellow.close + ansiStyles.bold.close,
+	},
+	info: {
+		open: ansiStyles.cyan.open,
+		close: ansiStyles.cyan.close,
+	},
+	muted: {
+		open: ansiStyles.gray.open,
+		close: ansiStyles.gray.close,
+	},
+};
+
+// `chalk.theme` returns an object whose properties are the named builders. Cached on the
+// instance on first access (same memoization pattern as the per-style getters above), so chained
+// reads like `chalk.bold.theme.error` keep working — the bold styler is already on `this[STYLER]`
+// when the getter runs and the per-theme builder simply chains on top. The cached object is
+// `configurable` so `addTheme` can rebuild it when the registry grows.
+styles.theme = {
+	get() {
+		const theme = Object.create(null);
+		for (const [name, {open, close}] of Object.entries(themes)) {
+			theme[name] = createBuilder(this, createStyler(open, close, this[STYLER]), this[IS_EMPTY]);
+		}
+
+		Object.defineProperty(this, 'theme', {value: theme, configurable: true});
+		return theme;
+	},
+};
+
+// `addTheme` registers a custom theme by name, joining the shared `themes` registry so the new
+// preset is available on every instance (default `chalk` and any `new Chalk()` created afterwards).
+// Open/close are extracted from the builder's styler so the result stays consistent with the
+// level the builder was captured at — callers should pass `chalk.bold.green` rather than e.g.
+// `chalk` itself, which carries no style info.
+styles.addTheme = {
+	value(name, builder) {
+		if (typeof name !== 'string' || name.length === 0) {
+			throw new TypeError('Theme name must be a non-empty string');
+		}
+
+		if (typeof builder !== 'function' || builder[STYLER] === undefined) {
+			throw new TypeError('Theme builder must be a chained Chalk style, not the base `chalk` function');
+		}
+
+		const {openAll, closeAll} = builder[STYLER];
+		themes[name] = {open: openAll, close: closeAll};
+
+		// If `this` already cached its theme object, rebuild it so the new entry is visible.
+		// Other instances with pre-existing caches remain stale until `theme` is re-accessed
+		// freshly — call `addTheme` early, before any `chalk.theme` access, to avoid that.
+		if (Object.hasOwn(this, 'theme')) {
+			const rebuilt = Object.create(null);
+			for (const [n, {open, close}] of Object.entries(themes)) {
+				rebuilt[n] = createBuilder(this, createStyler(open, close, this[STYLER]), this[IS_EMPTY]);
+			}
+
+			Object.defineProperty(this, 'theme', {value: rebuilt, configurable: true});
+		}
+
+		return this;
+	},
+};
+
 const proto = Object.defineProperties(
 	() => {},
 	{
